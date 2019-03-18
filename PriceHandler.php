@@ -9,9 +9,9 @@ class PriceHandler
 	private $complete_price_dir;
 
 
-	public function __construct($dir, $result_dir, $complete_dir)
+	public function __construct($folder, $result_dir, $complete_dir)
 	{
-		$this->folder = $dir;
+		$this->folder = $folder;
 		$this->result_dir = $result_dir;
 		$this->complete_price_dir = $complete_dir;
 	}
@@ -44,11 +44,8 @@ class PriceHandler
 		/*
 		- мтод создает дерево файлов из прайс листа
 		*/
-	public function create_tree($price)
+	public function create_tree($price, $file)
 	{
-			// открываем дескриптор файла
-		$file = fopen($price, "rb");
-		flock($file, LOCK_EX);
 			// получаем назване прайс-листа, который взят в обработку
 		$this->price_name = basename($price, '.csv');
 			// создаем временную папку для этого прайса
@@ -58,7 +55,7 @@ class PriceHandler
 			// проходим построчно по файлу
 		foreach($this->get_str($file) as $file_str){
 
-			if(!isset($count)) $count=0;
+		
 				// создаем префикс артикула
 			$vendor_prefix = substr($file_str[1], 0, 5);
 				// путь к создаваемым файлам
@@ -66,15 +63,26 @@ class PriceHandler
 
 				// создаем массив
 			$buffer[$file_str[0]][$vendor_prefix][] = $file_str;
-			$count++;
+			
 
-
-			if($count > 10){
+			
 				$this->clear_buffer($buffer);
 				$buffer = [];
-			}	
+				
 		}
+
 		fclose($file);
+		// переносим исходный файл в новую папку
+		if(!is_dir($this->complete_price_dir)){
+			mkdir($this->complete_price_dir, 0770, true);
+		}
+		if(copy($this->folder.'/'.$this->price_name.'.csv', $this->complete_price_dir.'/'.$this->price_name.'.csv')){
+			unlink($this->folder.'/'.$this->price_name.'.csv');
+		}
+		echo 'Закрываем файл и переносим'.PHP_EOL;
+		echo $this->complete_price_dir.PHP_EOL;
+		echo $this->folder.'/'.$this->price_name.'.csv'.PHP_EOL;
+			
 	}
 
 		/*
@@ -85,6 +93,8 @@ class PriceHandler
 		if(!is_dir($this->result_dir)){
 			mkdir($this->result_dir, 0770);
 		}
+
+		$complete_price_name = $this->price_name.'_complete.csv';
 
 		foreach($this->get_file( $this->get_tmp_file_list() ) as $tmp_file){
 
@@ -110,7 +120,7 @@ class PriceHandler
 			fclose($f_tmp);
 			unlink($tmp_file);
 			
-			$f = fopen($this->result_dir.'/'.$this->price_name.'_complete', "a+b");
+			$f = fopen($this->result_dir.'/'.$complete_price_name, "a+b");
 
 			foreach($data as $data_str){
 				if(is_array($data_str)){
@@ -119,9 +129,17 @@ class PriceHandler
 			}
 			unset($data);
 			fclose($f);
-		}
-		//rmdir($this->tmp_folder);
+		}	
+
 		
+
+			// удаляем временные папки
+		$tmp_dir_arr = glob($this->tmp_folder.'/*');
+		for($i=0; $i<count($tmp_dir_arr); $i++){
+			rmdir($tmp_dir_arr[$i]);
+		}
+		rmdir($this->tmp_folder);
+	
 	}
 
 		/*
